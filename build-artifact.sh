@@ -23,10 +23,15 @@ realpath() {
   echo "$(cd "$(dirname "$1")"; pwd)/$(basename "$1")"
 }
 
+download_src_tar() {
+    ls $(pwd)/aurora-${AURORA_VERSION}.tar.gz || curl -L -o $(pwd)/aurora-${AURORA_VERSION}.tar.gz  "https://github.com/apache/aurora/archive/${AURORA_VERSION}.tar.gz"
+}
+
 run_build() {
   BUILDER_DIR=$1
-  RELEASE_TAR=$2
-  AURORA_VERSION=$3
+  AURORA_VERSION=$2
+  
+  echo "building $AURORA_VERSION"
 
   IMAGE_NAME="aurora-$(basename $BUILDER_DIR)"
   echo "Using docker image $IMAGE_NAME"
@@ -34,11 +39,12 @@ run_build() {
 
   ARTIFACT_DIR="$(pwd)/dist/$BUILDER_DIR"
   mkdir -p $ARTIFACT_DIR
+  download_src_tar
   docker run \
     --rm \
     -e AURORA_VERSION=$AURORA_VERSION \
     -v "$(pwd)/specs:/specs:ro" \
-    -v "$(realpath $RELEASE_TAR):/src.tar.gz:ro" \
+    -v "$(pwd)/aurora-${AURORA_VERSION}.tar.gz:/src.tar.gz:ro" \
     -v "$ARTIFACT_DIR:/dist" \
     -t "$IMAGE_NAME" /build.sh
 
@@ -47,24 +53,26 @@ run_build() {
 }
 
 case $# in
-  2)
+  1)
+    echo "building using all builders"
     for builder in $(print_available_builders); do
-      run_build $builder $1 $2
+      run_build $builder $1 
       echo $builder
     done
     ;;
 
-  3)
+  2)
+    echo "building specific"
     run_build "$@"
     ;;
 
   *)
     echo 'usage:'
     echo 'to build all artifacts:'
-    echo "  $0 RELEASE_TAR AURORA_VERSION"
+    echo "  $0 AURORA_VERSION"
     echo
     echo 'or to build a specific artifact:'
-    echo "  $0 BUILDER RELEASE_TAR AURORA_VERSION"
+    echo "  $0 BUILDER AURORA_VERSION"
     echo
     echo 'Where BUILDER is a builder directory in:'
     print_available_builders
